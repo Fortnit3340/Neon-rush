@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Neon Rush</title>
+<style>
+*{box-sizing:border-box}body{margin:0;overflow:hidden;background:#070a16;color:white;font-family:Arial,sans-serif}
+canvas{display:block;width:100vw;height:100vh}
+#ui{position:fixed;inset:0;pointer-events:none}
+.top{display:flex;justify-content:space-between;padding:18px}
+.box{background:#10152bcc;border:1px solid #ffffff22;border-radius:14px;padding:9px 14px}
+.label{font-size:11px;color:#9ca8c8;letter-spacing:1px}.num{font-size:24px;font-weight:900}
+#center{position:absolute;inset:0;display:grid;place-items:center;text-align:center}
+.panel{pointer-events:auto;background:#0c1122ee;border:1px solid #ffffff25;border-radius:24px;padding:32px 40px;box-shadow:0 25px 80px #0009}
+h1{font-size:52px;margin:0 0 8px;background:linear-gradient(90deg,#5de9ff,#9c75ff,#ff65c8);-webkit-background-clip:text;color:transparent}
+p{color:#b5bfdc;max-width:430px;line-height:1.5}
+button{border:0;border-radius:13px;padding:14px 25px;font-weight:900;font-size:16px;cursor:pointer;background:#64edff;color:#06101a}
+.hidden{display:none}.hint{position:absolute;bottom:15px;left:50%;transform:translateX(-50%);font-size:13px;color:#8994b5;background:#070a16bb;padding:8px 12px;border-radius:10px;white-space:nowrap}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+<div class="top"><div class="box"><div class="label">SCORE</div><div id="score" class="num">0</div></div><div class="box" style="text-align:right"><div class="label">BEST</div><div id="best" class="num">0</div></div></div>
+<div id="center">
+<div id="menu" class="panel"><h1>NEON RUSH</h1><p>Collect the glowing energy orbs and survive as long as possible. Red hunters are slower now, and the colorful arena helps you see everything!</p><button id="play">PLAY NOW</button><p class="label">WASD / ARROWS = MOVE &nbsp; • &nbsp; SPACE = DASH</p></div>
+<div id="over" class="panel hidden"><h1>GAME OVER</h1><p id="result"></p><button id="again">RUN IT BACK</button></div>
+</div>
+<div class="hint">🔵 Collect orbs &nbsp; 🔴 Dodge hunters &nbsp; ⚡ Space to dash</div>
+</div>
+<script>
+const c=document.getElementById("c"),ctx=c.getContext("2d");let W,H,d=1;
+let p,orbs,enemies,parts,score,best=Number(localStorage.neonBest||0),playing=false,last=0,enemyTimer=0,orbTimer=0,keys={};
+document.getElementById("best").textContent=best;
+function resize(){d=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;c.width=W*d;c.height=H*d;ctx.setTransform(d,0,0,d,0,0)}addEventListener("resize",resize);resize();
+addEventListener("keydown",e=>{keys[e.key.toLowerCase()]=1;if(e.code==="Space")e.preventDefault()});
+addEventListener("keyup",e=>keys[e.key.toLowerCase()]=0);
+function burst(x,y,col,n){for(let i=0;i<n;i++){let a=Math.random()*6.28,s=60+Math.random()*240;parts.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,l:.4+Math.random()*.6,col})}}
+function edge(){let q=Math.floor(Math.random()*4);return q===0?{x:-25,y:Math.random()*H}:q===1?{x:W+25,y:Math.random()*H}:q===2?{x:Math.random()*W,y:-25}:{x:Math.random()*W,y:H+25}}
+function start(){p={x:W/2,y:H/2,r:17,vx:0,vy:0,dash:0,trail:[]};orbs=[];enemies=[];parts=[];score=0;enemyTimer=0;orbTimer=0;playing=true;document.getElementById("menu").classList.add("hidden");document.getElementById("over").classList.add("hidden");requestAnimationFrame(loop)}
+function finish(){playing=false;let s=Math.floor(score);if(s>best){best=s;localStorage.neonBest=best;document.getElementById("best").textContent=best}document.getElementById("result").textContent=`You scored ${s}. Best score: ${best}.`;document.getElementById("over").classList.remove("hidden")}
+function update(dt){
+let ax=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0),ay=(keys.s||keys.arrowdown?1:0)-(keys.w||keys.arrowup?1:0),m=Math.hypot(ax,ay)||1;
+if(keys[" "]&&p.dash<=0){p.vx=ax/m*820;p.vy=ay/m*820;p.dash=.28;burst(p.x,p.y,"#63eaff",18)}
+if(p.dash<=0){p.vx+=(ax/m*400-p.vx)*Math.min(1,dt*10);p.vy+=(ay/m*400-p.vy)*Math.min(1,dt*10)}
+p.x=Math.max(20,Math.min(W-20,p.x+p.vx*dt));p.y=Math.max(65,Math.min(H-20,p.y+p.vy*dt));p.dash-=dt;p.trail.push({x:p.x,y:p.y});if(p.trail.length>12)p.trail.shift();
+score+=dt*2;document.getElementById("score").textContent=Math.floor(score);
+enemyTimer-=dt;orbTimer-=dt;
+if(enemyTimer<=0){let q=edge();enemies.push({x:q.x,y:q.y,r:14,spd:38+Math.random()*28+score/45});enemyTimer=Math.max(.65,1.5-score/1800)}
+if(orbTimer<=0){orbs.push({x:45+Math.random()*(W-90),y:75+Math.random()*(H-120),r:9,a:Math.random()*6.28});orbTimer=.65+Math.random()*.8}
+for(let e of enemies){let dx=p.x-e.x,dy=p.y-e.y,dist=Math.hypot(dx,dy)||1;e.x+=dx/dist*e.spd*dt;e.y+=dy/dist*e.spd*dt;if(dist<p.r+e.r){burst(p.x,p.y,"#ff4d73",35);finish();return}}
+for(let i=orbs.length-1;i>=0;i--){let o=orbs[i];if(Math.hypot(p.x-o.x,p.y-o.y)<p.r+o.r+8){orbs.splice(i,1);score+=10;burst(o.x,o.y,"#66f5ff",16)}}
+for(let z of parts){z.x+=z.vx*dt;z.y+=z.vy*dt;z.vx*=.97;z.vy*=.97;z.l-=dt}parts=parts.filter(z=>z.l>0)
+}
+function draw(){
+ctx.clearRect(0,0,W,H);
+let bg=ctx.createRadialGradient(W*.5,H*.35,20,W*.5,H*.5,Math.max(W,H)*.8);
+bg.addColorStop(0,"#35206d"); bg.addColorStop(.28,"#123e68"); bg.addColorStop(.58,"#123c4f"); bg.addColorStop(1,"#090d27");
+ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+for(let i=0;i<7;i++){
+  let px=(W*(i+1)/8+Math.sin(performance.now()/1800+i)*70), py=H*(.18+.11*(i%4));
+  let glow=ctx.createRadialGradient(px,py,0,px,py,150);
+  glow.addColorStop(0,["#ff4fd8","#4eeaff","#7cff9b","#ffd45e","#a56cff"][i%5]+"33");
+  glow.addColorStop(1,"transparent");
+  ctx.fillStyle=glow; ctx.fillRect(px-160,py-160,320,320);
+}
+ctx.strokeStyle="#ffffff0b";ctx.lineWidth=1;let o=(performance.now()/30)%40;
+for(let x=-40;x<W+40;x+=40){ctx.beginPath();ctx.moveTo(x+o,0);ctx.lineTo(x+o,H);ctx.stroke()}
+for(let y=-40;y<H+40;y+=40){ctx.beginPath();ctx.moveTo(0,y+o);ctx.lineTo(W,y+o);ctx.stroke()}
+for(let z of parts){ctx.globalAlpha=z.l;ctx.fillStyle=z.col;ctx.beginPath();ctx.arc(z.x,z.y,3+z.l*3,0,7);ctx.fill()}ctx.globalAlpha=1;
+for(let o of orbs){o.a+=.06;ctx.shadowBlur=25;ctx.shadowColor="#55efff";ctx.fillStyle="#6cf6ff";ctx.beginPath();ctx.arc(o.x,o.y,o.r+Math.sin(o.a)*2,0,7);ctx.fill();ctx.shadowBlur=0}
+for(let e of enemies){ctx.shadowBlur=25;ctx.shadowColor="#ff426b";ctx.fillStyle="#ff476e";ctx.beginPath();ctx.arc(e.x,e.y,e.r,0,7);ctx.fill();ctx.shadowBlur=0}
+p.trail.forEach((q,i)=>{ctx.globalAlpha=i/p.trail.length*.25;ctx.fillStyle="#65eaff";ctx.beginPath();ctx.arc(q.x,q.y,p.r*i/p.trail.length,0,7);ctx.fill()});ctx.globalAlpha=1;
+ctx.shadowBlur=30;ctx.shadowColor="#55eaff";ctx.fillStyle="#eaffff";ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,7);ctx.fill();ctx.shadowBlur=0;
+}
+function loop(t){if(!playing)return;let dt=Math.min(.033,(t-last)/1000||.016);last=t;update(dt);draw();requestAnimationFrame(loop)}
+document.getElementById("play").onclick=start;document.getElementById("again").onclick=start;
+</script>
+</body>
+</html>
